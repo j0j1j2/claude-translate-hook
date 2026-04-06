@@ -15,7 +15,7 @@ export const MODELS = [
 const DEFAULTS = {
   mode: 'input-only',
   targetLanguage: 'Korean',
-  model: 'gemini-3-flash-preview',
+  model: 'gemini-3.1-flash-lite-preview',
   apiKey: '',
 };
 
