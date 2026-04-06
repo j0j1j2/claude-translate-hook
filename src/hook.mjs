@@ -41,6 +41,8 @@ export async function runHook() {
 
     if (config.mode === 'bidirectional' && config.targetLanguage) {
       parts.push(`[System instruction]: Please respond in ${config.targetLanguage}.`);
+    } else if (needsTranslation) {
+      parts.push(`[System instruction]: The user's message was in a non-English language. Use the English translation above to understand the request. Respond in English.`);
     }
 
     if (parts.length === 0) {
