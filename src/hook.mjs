@@ -18,7 +18,7 @@ export async function runHook() {
   const apiKey = config.apiKey || process.env.GEMINI_API_KEY || '';
 
   if (!apiKey) {
-    process.stderr.write('claude-translate-hook: No API key. Set via `claude-translate-hook config set apiKey <key>` or GEMINI_API_KEY env var.\n');
+    process.stderr.write('claude-translate-hook: No API key. Run `npx claude-translate-hook` to configure.\n');
     process.stdout.write('{}');
     return;
   }
@@ -35,7 +35,7 @@ export async function runHook() {
     const parts = [];
 
     if (needsTranslation) {
-      const translated = await translateToEnglish(prompt, apiKey);
+      const translated = await translateToEnglish(prompt, apiKey, config.model);
       parts.push(`[Translated to English]:\n${translated}`);
     }
 

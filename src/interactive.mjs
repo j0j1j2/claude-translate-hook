@@ -3,7 +3,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import chalk from 'chalk';
 import { select, input, confirm, password } from '@inquirer/prompts';
-import { loadConfig, saveConfig } from './config.mjs';
+import { loadConfig, saveConfig, MODELS } from './config.mjs';
 
 const SETTINGS_PATH = join(homedir(), '.claude', 'settings.json');
 const HOOK_COMMAND = 'npx -y claude-translate-hook hook';
@@ -54,6 +54,8 @@ export async function interactive() {
 
   console.log(statusLine('Hook    ', installed ? chalk.green('installed') : chalk.yellow('not installed'), installed));
   console.log(statusLine('API Key ', keyDisplay, hasKey));
+  const modelName = MODELS.find((m) => m.id === config.model)?.name || config.model;
+  console.log(statusLine('Model   ', chalk.white(modelName), true));
   console.log(statusLine('Mode    ', chalk.white(config.mode), true));
   if (config.mode === 'bidirectional') {
     console.log(statusLine('Language', chalk.white(config.targetLanguage), true));
@@ -101,6 +103,14 @@ async function doInstall(settings, config) {
       console.log(chalk.yellow('\n  Skipped. Set GEMINI_API_KEY env var or run this again later.\n'));
     }
   }
+
+  // Model
+  config.model = await select({
+    message: 'Gemini model',
+    choices: MODELS.map((m) => ({ name: m.name, value: m.id })),
+    default: config.model,
+    theme: { prefix: chalk.cyan('?') },
+  });
 
   // Mode
   config.mode = await select({
@@ -159,6 +169,10 @@ async function doConfigure(config) {
           value: 'apiKey',
         },
         {
+          name: `Model    ${chalk.dim(MODELS.find((m) => m.id === config.model)?.name || config.model)}`,
+          value: 'model',
+        },
+        {
           name: `Mode     ${chalk.dim(config.mode)}`,
           value: 'mode',
         },
@@ -184,6 +198,13 @@ async function doConfigure(config) {
         theme: { prefix: chalk.cyan('?') },
       });
       if (key) config.apiKey = key;
+    } else if (field === 'model') {
+      config.model = await select({
+        message: 'Gemini model',
+        choices: MODELS.map((m) => ({ name: m.name, value: m.id })),
+        default: config.model,
+        theme: { prefix: chalk.cyan('?') },
+      });
     } else if (field === 'mode') {
       config.mode = await select({
         message: 'Translation mode',

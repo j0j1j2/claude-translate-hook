@@ -1,4 +1,4 @@
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent';
+const GEMINI_API_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
 export function hasNonEnglish(text) {
   // Strip code blocks and inline code before checking
@@ -9,7 +9,7 @@ export function hasNonEnglish(text) {
   return /[^\u0000-\u007F\u00A0-\u00FF]/.test(cleaned);
 }
 
-export async function translateToEnglish(text, apiKey) {
+export async function translateToEnglish(text, apiKey, model = 'gemini-3-flash-preview') {
   const prompt = `You are a translator. Translate the following text to English.
 
 Rules:
@@ -24,7 +24,7 @@ Rules:
 Text:
 ${text}`;
 
-  const res = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+  const res = await fetch(`${GEMINI_API_BASE}/${model}:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

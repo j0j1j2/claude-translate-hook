@@ -5,9 +5,17 @@ import { homedir } from 'os';
 const CONFIG_DIR = join(homedir(), '.claude');
 const CONFIG_PATH = join(CONFIG_DIR, 'translate-hook.json');
 
+export const MODELS = [
+  { id: 'gemini-3-flash-preview', name: 'Gemini 3 Flash' },
+  { id: 'gemini-3.1-flash-lite-preview', name: 'Gemini 3.1 Flash Lite' },
+  { id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash' },
+  { id: 'gemini-2.5-flash-lite', name: 'Gemini 2.5 Flash Lite' },
+];
+
 const DEFAULTS = {
   mode: 'input-only',
   targetLanguage: 'Korean',
+  model: 'gemini-3-flash-preview',
   apiKey: '',
 };
 
