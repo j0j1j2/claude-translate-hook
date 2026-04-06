@@ -23,7 +23,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cloudchamb3r/claude-translate-hook"
+    "url": "https://github.com/j0j1j2/claude-translate-hook"
   },
   "dependencies": {
     "@inquirer/prompts": "^8.3.2",
