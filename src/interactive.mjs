@@ -1,7 +1,8 @@
-import { createInterface } from 'readline';
 import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import chalk from 'chalk';
+import { select, input, confirm, password } from '@inquirer/prompts';
 import { loadConfig, saveConfig } from './config.mjs';
 
 const SETTINGS_PATH = join(homedir(), '.claude', 'settings.json');
@@ -25,80 +26,107 @@ function isInstalled(settings) {
   );
 }
 
-function prompt(rl, question) {
-  return new Promise((resolve) => rl.question(question, (a) => resolve(a.trim())));
+function banner() {
+  console.log();
+  console.log(chalk.bold.cyan('  claude-translate-hook'));
+  console.log(chalk.dim('  Translate non-English prompts for Claude Code'));
+  console.log();
 }
 
-async function choose(rl, question, options) {
-  console.log();
-  console.log(question);
-  options.forEach((opt, i) => console.log(`  ${i + 1}) ${opt}`));
-  while (true) {
-    const answer = await prompt(rl, `Select [1-${options.length}]: `);
-    const n = parseInt(answer, 10);
-    if (n >= 1 && n <= options.length) return n - 1;
-  }
+function statusLine(label, value, ok) {
+  const icon = ok ? chalk.green('●') : chalk.dim('○');
+  return `  ${icon} ${chalk.dim(label)} ${value}`;
 }
 
 export async function interactive() {
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-
-  console.log('claude-translate-hook');
-  console.log('====================');
+  banner();
 
   const settings = readSettings();
   const installed = isInstalled(settings);
   const config = loadConfig();
 
-  // Show current status
-  console.log();
-  console.log(`Hook:     ${installed ? 'installed' : 'not installed'}`);
-  console.log(`API key:  ${config.apiKey ? config.apiKey.slice(0, 8) + '...' : process.env.GEMINI_API_KEY ? '(env var)' : 'not set'}`);
-  console.log(`Mode:     ${config.mode}`);
+  const hasKey = !!(config.apiKey || process.env.GEMINI_API_KEY);
+  const keyDisplay = config.apiKey
+    ? chalk.green(config.apiKey.slice(0, 8) + '...')
+    : process.env.GEMINI_API_KEY
+      ? chalk.yellow('env var')
+      : chalk.red('not set');
+
+  console.log(statusLine('Hook    ', installed ? chalk.green('installed') : chalk.yellow('not installed'), installed));
+  console.log(statusLine('API Key ', keyDisplay, hasKey));
+  console.log(statusLine('Mode    ', chalk.white(config.mode), true));
   if (config.mode === 'bidirectional') {
-    console.log(`Language: ${config.targetLanguage}`);
+    console.log(statusLine('Language', chalk.white(config.targetLanguage), true));
   }
+  console.log();
 
-  const menuOptions = installed
-    ? ['Configure settings', 'Uninstall hook', 'Exit']
-    : ['Install hook', 'Exit'];
+  const choices = installed
+    ? [
+        { name: 'Configure settings', value: 'config' },
+        { name: 'Uninstall hook', value: 'uninstall' },
+        { name: 'Exit', value: 'exit' },
+      ]
+    : [
+        { name: 'Install hook', value: 'install' },
+        { name: 'Exit', value: 'exit' },
+      ];
 
-  const choice = await choose(rl, 'What would you like to do?', menuOptions);
+  const action = await select({
+    message: chalk.bold('What would you like to do?'),
+    choices,
+    theme: { prefix: chalk.cyan('?') },
+  });
 
-  if (!installed) {
-    if (choice === 0) await doInstall(rl, settings, config);
-    // choice === 1 = Exit
-  } else {
-    if (choice === 0) await doConfigure(rl, config);
-    if (choice === 1) await doUninstall(settings);
-    // choice === 2 = Exit
-  }
-
-  rl.close();
+  if (action === 'install') await doInstall(settings, config);
+  if (action === 'config') await doConfigure(config);
+  if (action === 'uninstall') await doUninstall(settings);
 }
 
-async function doInstall(rl, settings, config) {
+async function doInstall(settings, config) {
   // API key
   if (!config.apiKey && !process.env.GEMINI_API_KEY) {
     console.log();
-    const key = await prompt(rl, 'Gemini API key (get one at https://aistudio.google.com/apikey): ');
+    console.log(chalk.dim('  Get your API key at ') + chalk.underline.cyan('https://aistudio.google.com/apikey'));
+    console.log();
+
+    const key = await password({
+      message: 'Gemini API key',
+      mask: '*',
+      theme: { prefix: chalk.cyan('?') },
+    });
+
     if (key) {
       config.apiKey = key;
     } else {
-      console.log('Skipped. Set GEMINI_API_KEY env var or run this again later.');
+      console.log(chalk.yellow('\n  Skipped. Set GEMINI_API_KEY env var or run this again later.\n'));
     }
   }
 
   // Mode
-  const modeIdx = await choose(rl, 'Translation mode:', [
-    'Input only - translate your prompts to English',
-    'Bidirectional - also have Claude respond in your language',
-  ]);
-  config.mode = modeIdx === 0 ? 'input-only' : 'bidirectional';
+  config.mode = await select({
+    message: 'Translation mode',
+    choices: [
+      {
+        name: 'Input only',
+        value: 'input-only',
+        description: 'Translate your prompts to English',
+      },
+      {
+        name: 'Bidirectional',
+        value: 'bidirectional',
+        description: 'Also instruct Claude to respond in your language',
+      },
+    ],
+    theme: { prefix: chalk.cyan('?') },
+  });
 
   // Target language
   if (config.mode === 'bidirectional') {
-    const lang = await prompt(rl, `Target language for Claude responses [${config.targetLanguage}]: `);
+    const lang = await input({
+      message: 'Target language for responses',
+      default: config.targetLanguage,
+      theme: { prefix: chalk.cyan('?') },
+    });
     if (lang) config.targetLanguage = lang;
   }
 
@@ -113,42 +141,86 @@ async function doInstall(rl, settings, config) {
   });
 
   writeSettings(settings);
-  console.log('\nInstalled! Restart Claude Code for changes to take effect.');
+
+  console.log();
+  console.log(chalk.green.bold('  Done!') + ' Hook installed successfully.');
+  console.log(chalk.dim('  Restart Claude Code for changes to take effect.'));
+  console.log();
 }
 
-async function doConfigure(rl, config) {
-  while (true) {
-    const options = [
-      `API key: ${config.apiKey ? config.apiKey.slice(0, 8) + '...' : '(not set)'}`,
-      `Mode: ${config.mode}`,
-      `Target language: ${config.targetLanguage}`,
-      'Save & exit',
-    ];
+async function doConfigure(config) {
+  let done = false;
+  while (!done) {
+    const field = await select({
+      message: chalk.bold('Edit settings'),
+      choices: [
+        {
+          name: `API key  ${chalk.dim(config.apiKey ? config.apiKey.slice(0, 8) + '...' : '(not set)')}`,
+          value: 'apiKey',
+        },
+        {
+          name: `Mode     ${chalk.dim(config.mode)}`,
+          value: 'mode',
+        },
+        {
+          name: `Language ${chalk.dim(config.targetLanguage)}`,
+          value: 'targetLanguage',
+        },
+        {
+          name: chalk.green('Save & exit'),
+          value: 'save',
+        },
+      ],
+      theme: { prefix: chalk.cyan('>') },
+    });
 
-    const choice = await choose(rl, 'Edit settings:', options);
-
-    if (choice === 0) {
-      const key = await prompt(rl, 'Gemini API key: ');
+    if (field === 'apiKey') {
+      console.log();
+      console.log(chalk.dim('  Get your API key at ') + chalk.underline.cyan('https://aistudio.google.com/apikey'));
+      console.log();
+      const key = await password({
+        message: 'Gemini API key',
+        mask: '*',
+        theme: { prefix: chalk.cyan('?') },
+      });
       if (key) config.apiKey = key;
-    } else if (choice === 1) {
-      const modeIdx = await choose(rl, 'Translation mode:', [
-        'Input only - translate your prompts to English',
-        'Bidirectional - also have Claude respond in your language',
-      ]);
-      config.mode = modeIdx === 0 ? 'input-only' : 'bidirectional';
-    } else if (choice === 2) {
-      const lang = await prompt(rl, `Target language [${config.targetLanguage}]: `);
+    } else if (field === 'mode') {
+      config.mode = await select({
+        message: 'Translation mode',
+        choices: [
+          { name: 'Input only', value: 'input-only', description: 'Translate your prompts to English' },
+          { name: 'Bidirectional', value: 'bidirectional', description: 'Also instruct Claude to respond in your language' },
+        ],
+        default: config.mode,
+        theme: { prefix: chalk.cyan('?') },
+      });
+    } else if (field === 'targetLanguage') {
+      const lang = await input({
+        message: 'Target language',
+        default: config.targetLanguage,
+        theme: { prefix: chalk.cyan('?') },
+      });
       if (lang) config.targetLanguage = lang;
     } else {
-      break;
+      done = true;
     }
   }
 
   saveConfig(config);
-  console.log('\nSettings saved.');
+  console.log();
+  console.log(chalk.green.bold('  Settings saved.'));
+  console.log();
 }
 
 async function doUninstall(settings) {
+  const yes = await confirm({
+    message: 'Are you sure you want to uninstall?',
+    default: false,
+    theme: { prefix: chalk.red('!') },
+  });
+
+  if (!yes) return;
+
   if (settings.hooks?.UserPromptSubmit) {
     settings.hooks.UserPromptSubmit = settings.hooks.UserPromptSubmit.filter(
       (entry) => !entry.hooks?.some((h) => h.command?.includes('claude-translate-hook'))
@@ -158,5 +230,8 @@ async function doUninstall(settings) {
     }
   }
   writeSettings(settings);
-  console.log('\nHook uninstalled.');
+
+  console.log();
+  console.log(chalk.green.bold('  Hook uninstalled.'));
+  console.log();
 }

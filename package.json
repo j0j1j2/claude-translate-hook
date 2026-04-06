@@ -24,5 +24,9 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/cloudchamb3r/claude-translate-hook"
+  },
+  "dependencies": {
+    "@inquirer/prompts": "^8.3.2",
+    "chalk": "^5.6.2"
   }
 }
